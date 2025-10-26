@@ -1,0 +1,159 @@
+<!--
+Single-file Opt-in Page
+Instructions:
+1) Replace FORM_ENDPOINT with your Formspree / webhook URL (or keep empty to use mailto fallback).
+   Example Formspree action: https://formspree.io/f/yourFormId
+2) Replace FREEBIE_URL with the URL you want subscribers to receive (PDF, Google Drive link, YouTube video, etc.).
+3) Host this file on any static host (Netlify, Vercel, GitHub Pages) or your web server. The URL you host it at is the shareable link.
+
+How it works:
+- User clicks the single large button -> modal opens to collect Name + Email.
+- On submit, form is POSTed to FORM_ENDPOINT (if provided). On success (or fallback), the FREEBIE_URL opens in a new tab and user sees a confirmation message.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sushi Bites Co. — Freebie</title>
+  <style>
+    :root{--accent:#e63946;--bg:#fffaf6;--text:#0f172a}
+    *{box-sizing:border-box}
+    body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:0; background:linear-gradient(180deg, #fff 0%, var(--bg) 100%); color:var(--text);}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+    .card{width:100%;max-width:720px;background:white;border-radius:16px;box-shadow:0 10px 30px rgba(15,23,42,0.08);padding:40px;text-align:center}
+    h1{margin:0 0 8px;font-size:28px}
+    p.lead{margin:0 0 24px;color:#475569}
+    .cta-btn{display:inline-block;padding:16px 28px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;font-size:18px;border:none;cursor:pointer;box-shadow:0 6px 18px rgba(230,57,70,0.28)}
+    .cta-btn:active{transform:translateY(1px)}
+
+    /* modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.52);display:none;align-items:center;justify-content:center;padding:24px}
+    .modal{background:white;border-radius:12px;padding:24px;max-width:480px;width:100%;text-align:left}
+    .modal h2{margin:0 0 12px}
+    .field{margin-bottom:12px}
+    label{display:block;font-size:13px;margin-bottom:6px;color:#334155}
+    input[type=text],input[type=email]{width:100%;padding:12px;border-radius:8px;border:1px solid #e6eef7;font-size:15px}
+    .row{display:flex;gap:12px}
+    .small{font-size:13px;color:#64748b}
+    .secondary{background:#f1f5f9;border-radius:8px;padding:10px;text-align:center}
+    .close-btn{background:transparent;border:none;color:#64748b;cursor:pointer;font-weight:600}
+    .success{background:#ecfccb;border-radius:10px;padding:14px;color:#25411a;margin-top:12px}
+
+    @media (max-width:520px){.card{padding:20px}h1{font-size:22px}.cta-btn{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 24 24'><rect width='24' height='24' fill='%23fffaf6' rx='6'/><path d='M12 5c3.866 0 7 1.79 7 4 0 2.21-3.134 4-7 4s-7-1.79-7-4c0-2.21 3.134-4 7-4z' fill='%23e63946'/><path d='M5 14c1.5 1 4 2 7 2s5.5-1 7-2v3a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-3z' fill='%230f172a' opacity='0.06'/></svg>" alt="Sushi logo" style="width:88px;height:88px;margin-bottom:12px"/>
+      <h1>Get your FREE Sushi Tip & Recipe</h1>
+      <p class="lead">Tap the button below, enter your name and email, and we’ll send your freebie right to your inbox. No spam — just delicious sushi tips and exclusive offers!</p>
+
+      <button id="openModal" class="cta-btn">Get the Freebie</button>
+      <p style="margin-top:18px" class="small">By signing up you agree to receive occasional emails from Sushi Bites Co. You can unsubscribe anytime.</p>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="backdrop" class="modal-backdrop" role="dialog" aria-hidden="true">
+    <div class="modal" role="document">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h2>Claim Your Freebie</h2>
+        <button id="closeModal" class="close-btn">✕</button>
+      </div>
+      <p class="small">Enter your name and email below. We’ll email your freebie link instantly.</p>
+
+      <form id="optinForm">
+        <div class="field">
+          <label for="name">Full name</label>
+          <input id="name" name="name" type="text" placeholder="Juan Dela Cruz" required />
+        </div>
+        <div class="field">
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" placeholder="you@email.com" required />
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+          <button type="submit" class="cta-btn">Send my freebie</button>
+          <div style="flex:1;text-align:right"><button type="button" id="privacy" class="close-btn">Privacy</button></div>
+        </div>
+
+        <div id="status" aria-live="polite"></div>
+      </form>
+
+      <div id="privacyPanel" style="display:none;margin-top:12px" class="secondary small">We respect your privacy. Your email will only be used to send the freebie and occasional updates. Unsubscribe anytime.</div>
+    </div>
+  </div>
+
+  <script>
+    // CONFIG - replace these values
+    const FORM_ENDPOINT = ""; // e.g. "https://formspree.io/f/yourFormId" or your webhook URL
+    const FREEBIE_URL = "https://example.com/your-freebie.pdf"; // replace with your actual freebie URL
+
+    // Elements
+    const openModalBtn = document.getElementById('openModal');
+    const backdrop = document.getElementById('backdrop');
+    const closeModalBtn = document.getElementById('closeModal');
+    const form = document.getElementById('optinForm');
+    const status = document.getElementById('status');
+    const privacyBtn = document.getElementById('privacy');
+    const privacyPanel = document.getElementById('privacyPanel');
+
+    openModalBtn.addEventListener('click', ()=>{ backdrop.style.display='flex'; backdrop.setAttribute('aria-hidden','false'); document.getElementById('name').focus(); });
+    closeModalBtn.addEventListener('click', ()=>closeModal());
+    backdrop.addEventListener('click', (e)=>{ if(e.target===backdrop) closeModal(); });
+    privacyBtn.addEventListener('click', ()=>{ privacyPanel.style.display = privacyPanel.style.display === 'none' ? 'block' : 'none'; });
+
+    function closeModal(){ backdrop.style.display='none'; backdrop.setAttribute('aria-hidden','true'); status.innerHTML=''; form.reset(); privacyPanel.style.display='none'; }
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      status.innerHTML = '<div class="small">Sending... please wait</div>';
+
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+
+      const payload = {name, email, source: 'Sushi Bites Opt-in'};
+
+      try{
+        if(FORM_ENDPOINT){
+          // send to provided endpoint (expects JSON)
+          const res = await fetch(FORM_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if(!res.ok) throw new Error('Submission failed');
+
+          showSuccess();
+        } else {
+          // fallback: open user's mail client with mailto and still deliver freebie
+          const subject = encodeURIComponent('Sushi Bites Freebie Request');
+          const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nPlease send freebie.`);
+          window.location.href = `mailto:your@email.com?subject=${subject}&body=${body}`;
+
+          // still show success and open freebie
+          showSuccess();
+        }
+      }catch(err){
+        status.innerHTML = `<div class="small" style="color:#b91c1c">Oops — something went wrong. Please try again or email us directly.</div>`;
+        console.error(err);
+      }
+    });
+
+    function showSuccess(){
+      status.innerHTML = `<div class="success"><strong>Success!</strong> The freebie link will open shortly and a copy has been sent to your inbox (if your email provider supports it).</div>`;
+      // Open the freebie in a new tab after a short delay
+      setTimeout(()=>{ window.open(FREEBIE_URL, '_blank'); }, 900);
+      // Optionally close modal after a delay
+      setTimeout(()=>closeModal(), 2200);
+    }
+
+    // Accessibility: close with Escape
+    window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && backdrop.style.display==='flex') closeModal(); });
+  </script>
+</body>
+</html>
